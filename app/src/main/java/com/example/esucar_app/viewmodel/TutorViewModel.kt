@@ -1,20 +1,29 @@
 package com.example.esucar_app.viewmodel
 
-import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.esucar_app.data.AppDatabase
+import com.example.esucar_app.data.TutorDao
 import com.example.esucar_app.model.FormularioFaqState
 import com.example.esucar_app.model.FormularioHitoState
 import com.example.esucar_app.model.HitoTesis
 import com.example.esucar_app.model.PreguntaFrecuente
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import java.time.format.ResolverStyle
 
-class TutorViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val dao = AppDatabase.obtenerBaseDatos(application).tutorDao()
+class TutorViewModel(
+    private val dao: TutorDao,
+    poblarIniciales: Boolean = true,
+    private val onDatosPoblados: () -> Unit = {}
+) : ViewModel() {
 
     // Listas reactivas desde Room
     val listaHitos: StateFlow<List<HitoTesis>> = dao.obtenerHitos()
@@ -38,9 +47,27 @@ class TutorViewModel(application: Application) : AndroidViewModel(application) {
     private val _categoriaSeleccionada = MutableStateFlow("Todas")
     val categoriaSeleccionada: StateFlow<String> = _categoriaSeleccionada.asStateFlow()
 
+    val preguntasFiltradas: StateFlow<List<PreguntaFrecuente>> = combine(
+        listaPreguntas,
+        _busquedaFaq,
+        _categoriaSeleccionada
+    ) { preguntas, busqueda, categoria ->
+        val termino = busqueda.trim()
+        preguntas.filter { item ->
+            val coincideCategoria = categoria == "Todas" || item.categoria == categoria
+            val coincideTexto = termino.isEmpty() ||
+                    item.pregunta.contains(termino, ignoreCase = true) ||
+                    item.respuesta.contains(termino, ignoreCase = true)
+            coincideCategoria && coincideTexto
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     init {
-        viewModelScope.launch {
-            AppDatabase.poblarDatosIniciales(dao)
+        if (poblarIniciales) {
+            viewModelScope.launch {
+                AppDatabase.poblarDatosIniciales(dao)
+                onDatosPoblados()
+            }
         }
     }
 
@@ -80,10 +107,11 @@ class TutorViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onFechaChange(valor: String) {
-        val regexFecha = Regex("""^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/\d{4}$""")
+        val limpia = valor.trim()
         val error = when {
-            valor.isBlank() -> "La fecha límite es obligatoria"
-            !regexFecha.matches(valor.trim()) -> "Usa el formato DD/MM/AAAA (ej: 30/11/2026)"
+            limpia.isBlank() -> "La fecha límite es obligatoria"
+            !REGEX_FECHA.matches(limpia) -> "Usa el formato DD/MM/AAAA (ej: 30/11/2026)"
+            !esFechaCalendarioValida(limpia) -> "Ingresa una fecha de calendario válida (ej: 30/11/2026)"
             else -> null
         }
         _formHito.update { it.copy(fechaLimite = valor, errorFecha = error, guardadoExitoso = false) }
@@ -98,8 +126,8 @@ class TutorViewModel(application: Application) : AndroidViewModel(application) {
         _formHito.update { it.copy(criteriosRubrica = valor, errorRubrica = error, guardadoExitoso = false) }
     }
 
-    fun onFotoCapturada(bitmap: Bitmap?) {
-        _formHito.update { it.copy(fotoEvidencia = bitmap) }
+    fun onFotoCapturada(bitmap: Bitmap?, rutaArchivo: String? = null) {
+        _formHito.update { it.copy(fotoEvidencia = bitmap, rutaFotoEvidencia = rutaArchivo) }
     }
 
     fun validarYGuardarHito(): Boolean {
@@ -127,7 +155,8 @@ class TutorViewModel(application: Application) : AndroidViewModel(application) {
                     fechaLimite = validado.fechaLimite.trim(),
                     estado = "En desarrollo",
                     criteriosRubrica = validado.criteriosRubrica.trim(),
-                    tieneEvidenciaFoto = validado.fotoEvidencia != null
+                    tieneEvidenciaFoto = validado.fotoEvidencia != null || validado.rutaFotoEvidencia != null,
+                    rutaFotoEvidencia = validado.rutaFotoEvidencia
                 )
                 dao.insertarHito(nuevoHito)
                 _formHito.value = FormularioHitoState(guardadoExitoso = true)
@@ -147,6 +176,9 @@ class TutorViewModel(application: Application) : AndroidViewModel(application) {
 
     fun eliminarHito(hito: HitoTesis) {
         viewModelScope.launch {
+            hito.rutaFotoEvidencia?.let { ruta ->
+                runCatching { File(ruta).takeIf { it.exists() }?.delete() }
+            }
             dao.eliminarHito(hito)
         }
     }
@@ -183,6 +215,10 @@ class TutorViewModel(application: Application) : AndroidViewModel(application) {
         _formFaq.update { it.copy(respuesta = valor, errorRespuesta = error) }
     }
 
+    fun limpiarFormularioFaq() {
+        _formFaq.value = FormularioFaqState()
+    }
+
     fun guardarPreguntaFaq(): Boolean {
         val actual = _formFaq.value
         onPreguntaFaqChange(actual.pregunta)
@@ -204,5 +240,42 @@ class TutorViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         return esValido
+    }
+
+    companion object {
+        private const val PREFS_NAME = "esucar_tutor_prefs"
+        private const val KEY_SEED_COMPLETADO = "datos_iniciales_poblados"
+
+        private val REGEX_FECHA = Regex("""^\d{2}/\d{2}/\d{4}$""")
+        private val FORMATO_FECHA_ESTRICTO: DateTimeFormatter =
+            DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT)
+
+        internal fun esFechaCalendarioValida(fecha: String): Boolean {
+            return try {
+                val parsed = LocalDate.parse(fecha, FORMATO_FECHA_ESTRICTO)
+                parsed.year in 1900..2100
+            } catch (_: DateTimeParseException) {
+                false
+            }
+        }
+
+        fun provideFactory(context: Context): ViewModelProvider.Factory {
+            val appContext = context.applicationContext
+            return object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    val dao = AppDatabase.obtenerBaseDatos(appContext).tutorDao()
+                    val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    val yaPoblado = prefs.getBoolean(KEY_SEED_COMPLETADO, false)
+                    return TutorViewModel(
+                        dao = dao,
+                        poblarIniciales = !yaPoblado,
+                        onDatosPoblados = {
+                            prefs.edit().putBoolean(KEY_SEED_COMPLETADO, true).apply()
+                        }
+                    ) as T
+                }
+            }
+        }
     }
 }

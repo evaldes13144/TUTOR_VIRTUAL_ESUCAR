@@ -3,9 +3,9 @@ package com.example.esucar_app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.esucar_app.ui.AppNavigation
+import com.example.esucar_app.ui.theme.ESUCAR_APPTheme
 import com.example.esucar_app.util.NotificacionHelper
 import com.example.esucar_app.viewmodel.TutorViewModel
 
@@ -16,8 +16,10 @@ class MainActivity : ComponentActivity() {
         NotificacionHelper.crearCanalNotificaciones(this)
 
         setContent {
-            MaterialTheme {
-                val tutorViewModel: TutorViewModel = viewModel()
+            ESUCAR_APPTheme(darkTheme = false, dynamicColor = false) {
+                val tutorViewModel: TutorViewModel = viewModel(
+                    factory = TutorViewModel.provideFactory(applicationContext)
+                )
                 AppNavigation(viewModel = tutorViewModel)
             }
         }

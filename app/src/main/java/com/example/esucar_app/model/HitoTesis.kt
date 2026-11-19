@@ -14,5 +14,6 @@ data class HitoTesis(
     val fechaLimite: String,     // Formato DD/MM/AAAA
     val estado: String,          // Por iniciar, En desarrollo, Enviado, Aprobado
     val criteriosRubrica: String,
-    val tieneEvidenciaFoto: Boolean = false
+    val tieneEvidenciaFoto: Boolean = false,
+    val rutaFotoEvidencia: String? = null
 )

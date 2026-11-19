@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,7 +26,7 @@ import com.example.esucar_app.viewmodel.TutorViewModel
 
 @Composable
 fun PantallaFaq(viewModel: TutorViewModel) {
-    val preguntas by viewModel.listaPreguntas.collectAsState()
+    val preguntasFiltradas by viewModel.preguntasFiltradas.collectAsState()
     val textoBusqueda by viewModel.busquedaFaq.collectAsState()
     val categoriaActual by viewModel.categoriaSeleccionada.collectAsState()
     val formFaq by viewModel.formFaq.collectAsState()
@@ -33,14 +34,8 @@ fun PantallaFaq(viewModel: TutorViewModel) {
     var mostrarModalNuevaFaq by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    val categorias = listOf("Todas", "Metodología", "Citación APA", "Formato", "Entregas")
-
-    val preguntasFiltradas = preguntas.filter { item ->
-        val coincideCategoria = categoriaActual == "Todas" || item.categoria == categoriaActual
-        val coincideTexto = item.pregunta.contains(textoBusqueda, ignoreCase = true) ||
-                item.respuesta.contains(textoBusqueda, ignoreCase = true)
-        coincideCategoria && coincideTexto
-    }
+    val categoriasFiltro = listOf("Todas", "Metodología", "Citación APA", "Formato", "Entregas")
+    val categoriasCreacion = listOf("Metodología", "Citación APA", "Formato", "Entregas")
 
     Scaffold(
         floatingActionButton = {
@@ -93,7 +88,7 @@ fun PantallaFaq(viewModel: TutorViewModel) {
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                categorias.forEach { cat ->
+                categoriasFiltro.forEach { cat ->
                     FilterChip(
                         selected = categoriaActual == cat,
                         onClick = { viewModel.seleccionarCategoriaFaq(cat) },
@@ -116,16 +111,41 @@ fun PantallaFaq(viewModel: TutorViewModel) {
     }
 
     if (mostrarModalNuevaFaq) {
+        val cerrarModal = {
+            viewModel.limpiarFormularioFaq()
+            mostrarModalNuevaFaq = false
+        }
+
         AlertDialog(
-            onDismissRequest = { mostrarModalNuevaFaq = false },
+            onDismissRequest = cerrarModal,
             title = { Text("Registrar Apunte o Consulta FAQ", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Categoría:",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        categoriasCreacion.forEach { cat ->
+                            FilterChip(
+                                selected = formFaq.categoria == cat,
+                                onClick = { viewModel.onCategoriaFaqChange(cat) },
+                                label = { Text(cat, fontSize = 12.sp) }
+                            )
+                        }
+                    }
+
                     OutlinedTextField(
                         value = formFaq.pregunta,
                         onValueChange = { viewModel.onPreguntaFaqChange(it) },
                         label = { Text("Pregunta o duda metodológica") },
-                        leadingIcon = { Icon(Icons.Default.Help, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null) },
                         trailingIcon = {
                             if (formFaq.errorPregunta != null) {
                                 Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
@@ -171,7 +191,7 @@ fun PantallaFaq(viewModel: TutorViewModel) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { mostrarModalNuevaFaq = false }) {
+                TextButton(onClick = cerrarModal) {
                     Text("Cancelar")
                 }
             }

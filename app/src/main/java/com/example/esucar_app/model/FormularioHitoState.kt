@@ -10,6 +10,7 @@ data class FormularioHitoState(
     val fechaLimite: String = "",
     val criteriosRubrica: String = "",
     val fotoEvidencia: Bitmap? = null,
+    val rutaFotoEvidencia: String? = null,
 
 
     val errorTitulo: String? = null,

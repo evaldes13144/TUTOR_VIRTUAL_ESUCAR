@@ -2,9 +2,9 @@ package com.example.esucar_app.ui
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,6 +28,14 @@ fun AppNavigation(viewModel: TutorViewModel) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val rutaActual = backStackEntry?.destination?.route ?: "hitos"
 
+    val navegarATab: (String) -> Unit = { ruta ->
+        navController.navigate(ruta) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -47,38 +55,20 @@ fun AppNavigation(viewModel: TutorViewModel) {
             NavigationBar(containerColor = Color.White) {
                 NavigationBarItem(
                     selected = rutaActual == "hitos",
-                    onClick = {
-                        navController.navigate("hitos") {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
+                    onClick = { navegarATab("hitos") },
                     icon = { Icon(Icons.Default.Checklist, contentDescription = "Hitos") },
                     label = { Text("Mis Hitos") }
                 )
                 NavigationBarItem(
                     selected = rutaActual == "nuevo_hito",
-                    onClick = {
-                        navController.navigate("nuevo_hito") {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
+                    onClick = { navegarATab("nuevo_hito") },
                     icon = { Icon(Icons.Default.AddCircle, contentDescription = "Registrar") },
                     label = { Text("Nuevo Hito") }
                 )
                 NavigationBarItem(
                     selected = rutaActual == "faq",
-                    onClick = {
-                        navController.navigate("faq") {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                    icon = { Icon(Icons.Default.HelpOutline, contentDescription = "FAQ") },
+                    onClick = { navegarATab("faq") },
+                    icon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = "FAQ") },
                     label = { Text("Guía y FAQ") }
                 )
             }
@@ -92,13 +82,13 @@ fun AppNavigation(viewModel: TutorViewModel) {
             composable("hitos") {
                 PantallaHitos(
                     viewModel = viewModel,
-                    onIrANuevoHito = { navController.navigate("nuevo_hito") }
+                    onIrANuevoHito = { navegarATab("nuevo_hito") }
                 )
             }
             composable("nuevo_hito") {
                 PantallaFormularioHito(
                     viewModel = viewModel,
-                    onVolverAHitos = { navController.navigate("hitos") }
+                    onVolverAHitos = { navegarATab("hitos") }
                 )
             }
             composable("faq") {

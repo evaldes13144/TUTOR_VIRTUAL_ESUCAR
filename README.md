@@ -22,4 +22,4 @@ La aplicación está construida en **Kotlin** con **Jetpack Compose** bajo una a
 2. Abre **Android Studio** y selecciona la opción *Open* para cargar la carpeta del proyecto.
 3. Espera a que finalice la sincronización de dependencias de **Gradle** (el proyecto usa el catálogo TOML y tiene desactivado el built-in Kotlin en las properties para que KAPT compile Room sin errores).
 4. Selecciona un emulador con **Android 8.0 (API 26)** o superior, o conecta un dispositivo físico.
-5. Haz clic en **Run 'app'** (o presiona `Shift + F10`) para lanzar la aplicación[cite: 3].
+5. Haz clic en **Run 'app'** (o presiona `Shift + F10`) para lanzar la aplicación.

@@ -1,6 +1,7 @@
 package com.example.esucar_app.ui
 
 import android.Manifest
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -8,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,7 +22,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,10 +42,28 @@ fun PantallaHitos(
     val hitos by viewModel.listaHitos.collectAsState()
     val context = LocalContext.current
 
+    var hitoPendienteNotificacion by remember { mutableStateOf<HitoTesis?>(null) }
+    var hitoAEliminar by remember { mutableStateOf<HitoTesis?>(null) }
+
     val permisoNotificacionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { concedido ->
-        if (!concedido) {
+        val pendiente = hitoPendienteNotificacion
+        hitoPendienteNotificacion = null
+        if (concedido && pendiente != null) {
+            val enviada = NotificacionHelper.mostrarNotificacionHito(
+                context,
+                pendiente.titulo,
+                pendiente.fechaLimite
+            )
+            if (enviada) {
+                Toast.makeText(
+                    context,
+                    "Notificación enviada para ${pendiente.titulo}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        } else if (!concedido) {
             Toast.makeText(context, "Permiso de notificaciones denegado", Toast.LENGTH_SHORT).show()
         }
     }
@@ -48,7 +71,7 @@ fun PantallaHitos(
     val totalHitos = hitos.size.coerceAtLeast(1)
     val aprobados = hitos.count { it.estado == "Aprobado" || it.estado == "Enviado" }
     val progresoAnimado by animateFloatAsState(
-        targetValue = aprobados.toFloat() / totalHitos.toFloat(),
+        targetValue = if (hitos.isEmpty()) 0f else aprobados.toFloat() / totalHitos.toFloat(),
         label = "progreso_tesis"
     )
 
@@ -99,33 +122,98 @@ fun PantallaHitos(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            items(hitos, key = { it.id }) { hito ->
-                TarjetaHitoItem(
-                    hito = hito,
-                    onCambiarEstado = { viewModel.cambiarEstadoHito(hito) },
-                    onRecordarFecha = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            permisoNotificacionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                        NotificacionHelper.mostrarNotificacionHito(
-                            context,
-                            hito.titulo,
-                            hito.fechaLimite
-                        )
-                        Toast.makeText(
-                            context,
-                            "Notificación enviada para ${hito.titulo}",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    },
-                    onEliminar = { viewModel.eliminarHito(hito) }
-                )
+        if (hitos.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "No tienes hitos registrados",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = VerdeEsucar
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Agrega un nuevo capítulo o entregable para hacer seguimiento de tu Trabajo de Título.",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Button(
+                        onClick = onIrANuevoHito,
+                        colors = ButtonDefaults.buttonColors(containerColor = VerdeEsucar)
+                    ) {
+                        Icon(Icons.Default.AddCircle, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Registrar Nuevo Hito")
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                items(hitos, key = { it.id }) { hito ->
+                    TarjetaHitoItem(
+                        hito = hito,
+                        onCambiarEstado = { viewModel.cambiarEstadoHito(hito) },
+                        onRecordarFecha = {
+                            if (NotificacionHelper.tienePermisoNotificaciones(context)) {
+                                val enviada = NotificacionHelper.mostrarNotificacionHito(
+                                    context,
+                                    hito.titulo,
+                                    hito.fechaLimite
+                                )
+                                if (enviada) {
+                                    Toast.makeText(
+                                        context,
+                                        "Notificación enviada para ${hito.titulo}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                hitoPendienteNotificacion = hito
+                                permisoNotificacionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        },
+                        onEliminar = { hitoAEliminar = hito }
+                    )
+                }
             }
         }
+    }
+
+    hitoAEliminar?.let { hito ->
+        AlertDialog(
+            onDismissRequest = { hitoAEliminar = null },
+            title = { Text("Eliminar hito", fontWeight = FontWeight.Bold) },
+            text = { Text("¿Seguro que deseas eliminar \"${hito.titulo}\"? Esta acción no se puede deshacer.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.eliminarHito(hito)
+                        hitoAEliminar = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { hitoAEliminar = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 
@@ -227,15 +315,32 @@ fun TarjetaHitoItem(
             }
 
             if (hito.tieneEvidenciaFoto) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                val bitmapEvidencia = remember(hito.rutaFotoEvidencia) {
+                    hito.rutaFotoEvidencia?.let { ruta ->
+                        runCatching { BitmapFactory.decodeFile(ruta) }.getOrNull()
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.CameraAlt,
-                        contentDescription = null,
-                        tint = Color(0xFF2E7D32),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    if (bitmapEvidencia != null) {
+                        Image(
+                            bitmap = bitmapEvidencia.asImageBitmap(),
+                            contentDescription = "Foto de respaldo del hito",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    } else {
+                        Icon(
+                            Icons.Default.CameraAlt,
+                            contentDescription = null,
+                            tint = Color(0xFF2E7D32),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
                     Text(
                         text = "Respaldo fotográfico adjunto",
                         fontSize = 12.sp,

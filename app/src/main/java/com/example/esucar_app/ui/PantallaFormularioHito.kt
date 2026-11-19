@@ -1,17 +1,24 @@
 package com.example.esucar_app.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.launch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FactCheck
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +33,19 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.esucar_app.util.NotificacionHelper
 import com.example.esucar_app.viewmodel.TutorViewModel
+import java.io.File
+import java.io.FileOutputStream
+
+private fun guardarBitmapEnArchivo(context: Context, bitmap: Bitmap): String? {
+    return runCatching {
+        val carpeta = File(context.filesDir, "evidencias").apply { mkdirs() }
+        val archivo = File(carpeta, "evidencia_${System.currentTimeMillis()}.jpg")
+        FileOutputStream(archivo).use { out ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+        }
+        archivo.absolutePath
+    }.getOrNull()
+}
 
 @Composable
 fun PantallaFormularioHito(
@@ -36,11 +56,26 @@ fun PantallaFormularioHito(
     val context = LocalContext.current
     val etapasDisponibles = listOf("Trabajo de Título I", "Trabajo de Título II", "Trabajo de Título III")
 
+    var alertaPendiente by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    val permisoNotificacionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { concedido ->
+        val pendiente = alertaPendiente
+        alertaPendiente = null
+        if (concedido && pendiente != null) {
+            NotificacionHelper.mostrarNotificacionHito(context, pendiente.first, pendiente.second)
+        }
+        Toast.makeText(context, "Hito guardado correctamente", Toast.LENGTH_SHORT).show()
+        onVolverAHitos()
+    }
+
     val camaraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap ->
         if (bitmap != null) {
-            viewModel.onFotoCapturada(bitmap)
+            val rutaArchivo = guardarBitmapEnArchivo(context, bitmap)
+            viewModel.onFotoCapturada(bitmap, rutaArchivo)
         }
     }
 
@@ -80,7 +115,9 @@ fun PantallaFormularioHito(
 
         Text(text = "Asignatura:", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             etapasDisponibles.forEach { etapa ->
@@ -99,11 +136,11 @@ fun PantallaFormularioHito(
             onValueChange = { viewModel.onTituloChange(it) },
             label = { Text("Título del capítulo o hito") },
             placeholder = { Text("Ej: Cap. 2: Marco Normativo") },
-            leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
+            leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
             trailingIcon = {
                 if (formState.errorTitulo != null) {
                     Icon(Icons.Default.Error, contentDescription = "Error", tint = MaterialTheme.colorScheme.error)
-                } else if (formState.titulo.length >= 6) {
+                } else if (formState.titulo.trim().length >= 6) {
                     Icon(Icons.Default.CheckCircle, contentDescription = "Correcto", tint = VerdeEsucar)
                 }
             },
@@ -120,7 +157,7 @@ fun PantallaFormularioHito(
             onValueChange = { viewModel.onDescripcionChange(it) },
             label = { Text("Descripción y alcance del avance") },
             placeholder = { Text("Detalla los contenidos que debe incluir esta entrega...") },
-            leadingIcon = { Icon(Icons.Default.Notes, contentDescription = null) },
+            leadingIcon = { Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = null) },
             trailingIcon = {
                 if (formState.errorDescripcion != null) {
                     Icon(Icons.Default.Error, contentDescription = "Error", tint = MaterialTheme.colorScheme.error)
@@ -177,7 +214,7 @@ fun PantallaFormularioHito(
             onValueChange = { viewModel.onRubricaChange(it) },
             label = { Text("Criterios de pauta / rúbrica") },
             placeholder = { Text("Ej: Coherencia de objetivos (50%), Citación APA (50%)") },
-            leadingIcon = { Icon(Icons.Default.FactCheck, contentDescription = null) },
+            leadingIcon = { Icon(Icons.AutoMirrored.Filled.FactCheck, contentDescription = null) },
             trailingIcon = {
                 if (formState.errorRubrica != null) {
                     Icon(Icons.Default.Error, contentDescription = "Error", tint = MaterialTheme.colorScheme.error)
@@ -238,7 +275,7 @@ fun PantallaFormularioHito(
                                 color = VerdeEsucar
                             )
                             Text(
-                                text = "Se vinculará al registro local del hito.",
+                                text = "Se guardará en el almacenamiento local del hito.",
                                 fontSize = 12.sp
                             )
                         }
@@ -251,12 +288,20 @@ fun PantallaFormularioHito(
 
         Button(
             onClick = {
-                val tituloActual = formState.titulo
-                val fechaActual = formState.fechaLimite
+                val tituloActual = formState.titulo.trim()
+                val fechaActual = formState.fechaLimite.trim()
                 if (viewModel.validarYGuardarHito()) {
-                    NotificacionHelper.mostrarNotificacionHito(context, tituloActual, fechaActual)
-                    Toast.makeText(context, "Hito guardado correctamente", Toast.LENGTH_SHORT).show()
-                    onVolverAHitos()
+                    if (NotificacionHelper.tienePermisoNotificaciones(context)) {
+                        NotificacionHelper.mostrarNotificacionHito(context, tituloActual, fechaActual)
+                        Toast.makeText(context, "Hito guardado correctamente", Toast.LENGTH_SHORT).show()
+                        onVolverAHitos()
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        alertaPendiente = tituloActual to fechaActual
+                        permisoNotificacionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        Toast.makeText(context, "Hito guardado correctamente", Toast.LENGTH_SHORT).show()
+                        onVolverAHitos()
+                    }
                 }
             },
             colors = ButtonDefaults.buttonColors(containerColor = VerdeEsucar),
@@ -266,7 +311,7 @@ fun PantallaFormularioHito(
         ) {
             Icon(Icons.Default.Save, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Guardar Hito y Programar Alerta", fontWeight = FontWeight.Bold)
+            Text("Guardar Hito y Enviar Alerta", fontWeight = FontWeight.Bold)
         }
     }
 }
