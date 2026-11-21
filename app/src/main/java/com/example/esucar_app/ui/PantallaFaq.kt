@@ -7,6 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
@@ -21,17 +24,23 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.esucar_app.model.PerfilUsuario
 import com.example.esucar_app.model.PreguntaFrecuente
 import com.example.esucar_app.viewmodel.TutorViewModel
 
 @Composable
-fun PantallaFaq(viewModel: TutorViewModel) {
+fun PantallaFaq(
+    viewModel: TutorViewModel,
+    esPantallaAncha: Boolean = false
+) {
     val preguntasFiltradas by viewModel.preguntasFiltradas.collectAsState()
     val textoBusqueda by viewModel.busquedaFaq.collectAsState()
     val categoriaActual by viewModel.categoriaSeleccionada.collectAsState()
     val formFaq by viewModel.formFaq.collectAsState()
+    val perfilActual by viewModel.perfilActual.collectAsState()
 
     var mostrarModalNuevaFaq by remember { mutableStateOf(false) }
+    var faqAEliminar by remember { mutableStateOf<PreguntaFrecuente?>(null) }
     val context = LocalContext.current
 
     val categoriasFiltro = listOf("Todas", "Metodología", "Citación APA", "Formato", "Entregas")
@@ -40,7 +49,10 @@ fun PantallaFaq(viewModel: TutorViewModel) {
     Scaffold(
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { mostrarModalNuevaFaq = true },
+                onClick = {
+                    viewModel.limpiarFormularioFaq()
+                    mostrarModalNuevaFaq = true
+                },
                 containerColor = VerdeEsucar,
                 contentColor = Color.White,
                 icon = { Icon(Icons.Default.AddComment, contentDescription = null) },
@@ -51,7 +63,7 @@ fun PantallaFaq(viewModel: TutorViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF5F7F6))
+                .background(MaterialTheme.colorScheme.background)
                 .padding(padding)
                 .padding(16.dp)
         ) {
@@ -59,7 +71,7 @@ fun PantallaFaq(viewModel: TutorViewModel) {
                 text = "Buscador Metodológico y Norma APA",
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
-                color = VerdeEsucar
+                color = MaterialTheme.colorScheme.primary
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -67,12 +79,12 @@ fun PantallaFaq(viewModel: TutorViewModel) {
             OutlinedTextField(
                 value = textoBusqueda,
                 onValueChange = { viewModel.actualizarBusquedaFaq(it) },
-                label = { Text("Buscar por palabra clave (ej: APA, márgenes, objetivos)") },
+                label = { Text("Buscar (ej: APA, margenes, objetivos, ley)") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (textoBusqueda.isNotEmpty()) {
                         IconButton(onClick = { viewModel.actualizarBusquedaFaq("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                            Icon(Icons.Default.Clear, contentDescription = "Limpiar búsqueda")
                         }
                     }
                 },
@@ -99,12 +111,68 @@ fun PantallaFaq(viewModel: TutorViewModel) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(preguntasFiltradas, key = { it.id }) { item ->
-                    TarjetaFaqExpandible(item)
+            if (preguntasFiltradas.isEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "No se encontraron consultas",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Prueba con otra palabra clave o registra una nueva orientación usando el botón inferior.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else if (esPantallaAncha) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 88.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(preguntasFiltradas, key = { it.id }) { item ->
+                        TarjetaFaqExpandible(
+                            faq = item,
+                            puedeGestionar = perfilActual == PerfilUsuario.PROFESOR_GUIA,
+                            onEditar = {
+                                viewModel.cargarFaqParaEdicion(item)
+                                mostrarModalNuevaFaq = true
+                            },
+                            onEliminar = { faqAEliminar = item }
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 88.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(preguntasFiltradas, key = { it.id }) { item ->
+                        TarjetaFaqExpandible(
+                            faq = item,
+                            puedeGestionar = perfilActual == PerfilUsuario.PROFESOR_GUIA,
+                            onEditar = {
+                                viewModel.cargarFaqParaEdicion(item)
+                                mostrarModalNuevaFaq = true
+                            },
+                            onEliminar = { faqAEliminar = item }
+                        )
+                    }
                 }
             }
         }
@@ -118,7 +186,12 @@ fun PantallaFaq(viewModel: TutorViewModel) {
 
         AlertDialog(
             onDismissRequest = cerrarModal,
-            title = { Text("Registrar Apunte o Consulta FAQ", fontWeight = FontWeight.Bold) },
+            title = {
+                Text(
+                    text = if (formFaq.estaEditando) "Editar Consulta FAQ" else "Registrar Apunte o Consulta FAQ",
+                    fontWeight = FontWeight.Bold
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -147,9 +220,10 @@ fun PantallaFaq(viewModel: TutorViewModel) {
                         label = { Text("Pregunta o duda metodológica") },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null) },
                         trailingIcon = {
-                            if (formFaq.errorPregunta != null) {
-                                Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                            }
+                            IconoEstadoCampo(
+                                tieneError = formFaq.errorPregunta != null,
+                                esValido = formFaq.errorPregunta == null && formFaq.pregunta.trim().length >= 10
+                            )
                         },
                         isError = formFaq.errorPregunta != null,
                         supportingText = {
@@ -164,9 +238,10 @@ fun PantallaFaq(viewModel: TutorViewModel) {
                         label = { Text("Respuesta instructiva del profesor guía") },
                         leadingIcon = { Icon(Icons.Default.Lightbulb, contentDescription = null) },
                         trailingIcon = {
-                            if (formFaq.errorRespuesta != null) {
-                                Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                            }
+                            IconoEstadoCampo(
+                                tieneError = formFaq.errorRespuesta != null,
+                                esValido = formFaq.errorRespuesta == null && formFaq.respuesta.trim().length >= 15
+                            )
                         },
                         isError = formFaq.errorRespuesta != null,
                         supportingText = {
@@ -180,14 +255,19 @@ fun PantallaFaq(viewModel: TutorViewModel) {
             confirmButton = {
                 Button(
                     onClick = {
+                        val eraEdicion = formFaq.estaEditando
                         if (viewModel.guardarPreguntaFaq()) {
-                            Toast.makeText(context, "Consulta agregada al banco local", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                if (eraEdicion) "Consulta actualizada" else "Consulta agregada al banco local",
+                                Toast.LENGTH_SHORT
+                            ).show()
                             mostrarModalNuevaFaq = false
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = VerdeEsucar)
                 ) {
-                    Text("Guardar")
+                    Text(if (formFaq.estaEditando) "Actualizar" else "Guardar", color = Color.White)
                 }
             },
             dismissButton = {
@@ -197,10 +277,39 @@ fun PantallaFaq(viewModel: TutorViewModel) {
             }
         )
     }
+
+    faqAEliminar?.let { faq ->
+        AlertDialog(
+            onDismissRequest = { faqAEliminar = null },
+            title = { Text("Eliminar consulta FAQ", fontWeight = FontWeight.Bold) },
+            text = { Text("¿Seguro que deseas eliminar esta pregunta frecuente del banco local?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.eliminarPreguntaFaq(faq)
+                        faqAEliminar = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { faqAEliminar = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-fun TarjetaFaqExpandible(faq: PreguntaFrecuente) {
+fun TarjetaFaqExpandible(
+    faq: PreguntaFrecuente,
+    puedeGestionar: Boolean = false,
+    onEditar: () -> Unit = {},
+    onEliminar: () -> Unit = {}
+) {
     var expandido by remember { mutableStateOf(false) }
 
     Card(
@@ -208,7 +317,7 @@ fun TarjetaFaqExpandible(faq: PreguntaFrecuente) {
             .fillMaxWidth()
             .animateContentSize()
             .clickable { expandido = !expandido },
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -219,19 +328,40 @@ fun TarjetaFaqExpandible(faq: PreguntaFrecuente) {
             ) {
                 SuggestionChip(
                     onClick = { expandido = !expandido },
-                    label = { Text(faq.categoria, fontSize = 11.sp) }
+                    label = { Text(faq.categoria, fontSize = 12.sp) }
                 )
-                Icon(
-                    imageVector = if (expandido) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = VerdeEsucar
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (puedeGestionar) {
+                        IconButton(onClick = onEditar, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Editar consulta",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        IconButton(onClick = onEliminar, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = "Eliminar consulta",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = if (expandido) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (expandido) "Contraer respuesta" else "Expandir respuesta",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             Text(
                 text = faq.pregunta,
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = 4.dp)
             )
 
@@ -242,7 +372,7 @@ fun TarjetaFaqExpandible(faq: PreguntaFrecuente) {
                 Text(
                     text = faq.respuesta,
                     fontSize = 14.sp,
-                    color = Color.DarkGray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

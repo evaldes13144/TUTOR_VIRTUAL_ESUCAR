@@ -3,12 +3,16 @@ package com.example.esucar_app.util
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.example.esucar_app.MainActivity
+import com.example.esucar_app.R
 
 object NotificacionHelper {
 
@@ -36,7 +40,13 @@ object NotificacionHelper {
         }
     }
 
-    fun mostrarNotificacionHito(context: Context, tituloHito: String, fechaLimite: String): Boolean {
+    fun mostrarNotificacionHito(
+        context: Context,
+        tituloHito: String,
+        fechaLimite: String,
+        notificationId: Int = tituloHito.trim().hashCode(),
+        mensajeExtra: String? = null
+    ): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ActivityCompat.checkSelfPermission(
                 context,
@@ -49,19 +59,34 @@ object NotificacionHelper {
         val tituloLimpio = tituloHito.trim()
         val fechaLimpia = fechaLimite.trim()
 
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val cuerpoExtendido = buildString {
+            append("Recuerda revisar la rúbrica y el formato APA 7 para el hito '$tituloLimpio'. ")
+            append("Fecha límite de entrega: $fechaLimpia.")
+            if (!mensajeExtra.isNullOrBlank()) {
+                append(" $mensajeExtra")
+            }
+        }
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_notificacion_esucar)
             .setContentTitle("Recordatorio Académico ESUCAR")
-            .setContentText("Entrega programada: $tituloLimpio (Vence: $fechaLimpia)")
-            .setStyle(
-                NotificationCompat.BigTextStyle().bigText(
-                    "Recuerda revisar la rúbrica y el formato APA 7 para el hito '$tituloLimpio'. Fecha límite de entrega: $fechaLimpia."
-                )
-            )
+            .setContentText("Entrega: $tituloLimpio (Vence: $fechaLimpia)")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(cuerpoExtendido))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
             .setAutoCancel(true)
 
-        NotificationManagerCompat.from(context).notify(tituloLimpio.hashCode(), builder.build())
+        NotificationManagerCompat.from(context).notify(notificationId, builder.build())
         return true
     }
 }

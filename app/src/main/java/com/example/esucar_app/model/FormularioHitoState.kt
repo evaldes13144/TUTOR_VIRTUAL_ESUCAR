@@ -1,17 +1,15 @@
 package com.example.esucar_app.model
 
-import android.graphics.Bitmap
-
 data class FormularioHitoState(
+    val idEdicion: Int? = null,
+    val estadoOriginal: String? = null,
     val etapa: String = "Trabajo de Título I",
     val titulo: String = "",
     val descripcion: String = "",
     val formatoRequerido: String = "",
     val fechaLimite: String = "",
     val criteriosRubrica: String = "",
-    val fotoEvidencia: Bitmap? = null,
     val rutaFotoEvidencia: String? = null,
-
 
     val errorTitulo: String? = null,
     val errorDescripcion: String? = null,
@@ -20,12 +18,6 @@ data class FormularioHitoState(
     val errorRubrica: String? = null,
 
     val guardadoExitoso: Boolean = false
-)
-
-data class FormularioFaqState(
-    val pregunta: String = "",
-    val categoria: String = "Metodología",
-    val respuesta: String = "",
-    val errorPregunta: String? = null,
-    val errorRespuesta: String? = null
-)
+) {
+    val estaEditando: Boolean get() = idEdicion != null
+}

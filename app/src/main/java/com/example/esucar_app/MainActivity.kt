@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
         NotificacionHelper.crearCanalNotificaciones(this)
 
         setContent {
-            ESUCAR_APPTheme(darkTheme = false, dynamicColor = false) {
+            ESUCAR_APPTheme {
                 val tutorViewModel: TutorViewModel = viewModel(
                     factory = TutorViewModel.provideFactory(applicationContext)
                 )
